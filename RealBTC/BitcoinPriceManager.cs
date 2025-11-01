@@ -72,6 +72,7 @@ namespace RealBTC
         private async UniTaskVoid UpdateLoopAsync(CancellationToken token)
         {
             Debug.Log("[BitcoinPriceManager] 更新循环启动");
+            
 
             while (!token.IsCancellationRequested)
             {

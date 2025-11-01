@@ -2,36 +2,37 @@ using System;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using Newtonsoft.Json;
 
-namespace RealBTC
+namespace RealBTC.Network
 {
     public static class BinanceWebSocketClient
     {
+        public static event Action<KlineInfo> OnPriceUpdate;
+
         private static ClientWebSocket _webSocket;
         private static CancellationTokenSource _cts;
 
-        /// <summary>
-        /// 最新的 BTC 价格
-        /// </summary>
-        public static int CurrentBitcoinPrice { get; private set; }
+        public static int CurrentPrice=-1;
+        public static int CurrentPriceDivideBy5=-1;
 
-        /// <summary>
-        /// 价格更新事件，UI 或其他系统可订阅
-        /// </summary>
+        public static bool IsConnected
+        {
+            get
+            {
+                return _webSocket != null &&
+                       (_webSocket.State == WebSocketState.Open ||
+                        _webSocket.State == WebSocketState.CloseSent);
+            }
+        }
 
-        /// <summary>
-        /// 初始化 WebSocket 并开始监听
-        /// </summary>
         public static void Init(string symbol = "btcusdt")
         {
-            Debug.LogWarning("WebSocket 初始化！");
-
-            if (_webSocket != null && _webSocket.State == WebSocketState.Open)
+            if (IsConnected)
             {
-                Debug.LogWarning("WebSocket 已经初始化并连接！");
+                Debug.LogWarning("WebSocket 已经连接！");
                 return;
             }
 
@@ -42,8 +43,7 @@ namespace RealBTC
         private static async UniTask ConnectWebSocket(string symbol, CancellationToken token)
         {
             _webSocket = new ClientWebSocket();
-            //string url = $"wss://stream.binance.com:9443/ws/{symbol.ToLower()}@trade";
-            string url = $"wss://stream.binance.com:9443/ws/btcusdt@trade";
+            string url = $"wss://stream.binance.me:9443/ws/{symbol.ToLower()}@kline_1m";
 
             try
             {
@@ -60,25 +60,26 @@ namespace RealBTC
 
         private static async UniTask ReceiveLoop(CancellationToken token)
         {
-            var buffer = new byte[1024 * 4];
+            var buffer = new byte[1024 * 8];
 
-            while (_webSocket.State == WebSocketState.Open && !token.IsCancellationRequested)
+            //Debug.Log(IsConnected);
+           // // Debug.Log(token.IsCancellationRequested);
+
+            while (IsConnected && !token.IsCancellationRequested)
             {
+                 // Debug.Log("ReceiveLoop");
+
                 try
                 {
                     var result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), token);
-
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        Debug.Log("WebSocket 被服务器关闭");
                         await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
                         break;
                     }
-                    else
-                    {
-                        string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        ProcessMessage(msg);
-                    }
+
+                    string msg = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    ProcessMessage(msg);
                 }
                 catch (OperationCanceledException)
                 {
@@ -95,26 +96,72 @@ namespace RealBTC
         {
             try
             {
-                var json = JsonUtility.FromJson<TradeMsg>(msg);
-                if (json != null && !string.IsNullOrEmpty(json.p))
+                var wrapper = JsonConvert.DeserializeObject<KlineWrapper>(msg);
+                if (wrapper?.k != null)
                 {
-                    if (float.TryParse(json.p, out float priceFloat))
-                    {
-                        CurrentBitcoinPrice = Mathf.FloorToInt(priceFloat);
-                        Debug.Log(CurrentBitcoinPrice);
-                        BitcoinPriceManager.RaisePriceUpdate(CurrentBitcoinPrice/5);
-                    }
+                    var k = wrapper.k;
+                    //Debug.Log($"Open: {k.o}, Close: {k.c}, F: {k.f}");
+                    var info = new KlineInfo(
+                        open: Mathf.FloorToInt(float.Parse(k.o)),
+                        close: Mathf.FloorToInt(float.Parse(k.c)),
+                        high: Mathf.FloorToInt(float.Parse(k.h)),
+                        low: Mathf.FloorToInt(float.Parse(k.l)),
+                        trades: (k.n),
+                        flag: k.f==-1
+                    );
+                    
+                 //   Debug.Log(CurrentPrice);
+                    CurrentPrice = info.Close;
+                    CurrentPriceDivideBy5 = info.Close / 5;
+                    OnPriceUpdate?.Invoke(info);
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"解析 WebSocket 消息失败: {ex}");
+                Debug.LogWarning(ex);
             }
         }
+        // private static void ProcessMessage(string msg)
+        // {
+        //     Debug.Log("ProcessMessage");
+        //
+        //     try
+        //     {
+        //         Debug.Log(msg);
+        //
+        //         var json = JsonUtility.FromJson<KlineWrapper>(msg);
+        //         Debug.Log("JsonUtility");
+        //         Debug.Log(json);
+        //         Debug.Log(json.e);
+        //
+        //         Debug.Log(json.k);
+        //
+        //         if (json != null && json.k != null)
+        //         {
+        //             Debug.Log("json != null && json.k != null");
+        //
+        //             var k = json.k;
+        //             // 构造 readonly struct 并触发事件
+        //             var info = new KlineInfo(
+        //                 open: Mathf.FloorToInt(float.Parse(k.o)),
+        //                 close: Mathf.FloorToInt(float.Parse(k.c)),
+        //                 high: Mathf.FloorToInt(float.Parse(k.h)),
+        //                 low: Mathf.FloorToInt(float.Parse(k.l)),
+        //                 trades: (k.n)
+        //             );
+        //
+        //             Debug.Log(CurrentPrice);
+        //             CurrentPrice = info.Close;
+        //             CurrentPriceDivideBy5 = info.Close / 5;
+        //             OnPriceUpdate?.Invoke(info);
+        //         }
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         Debug.LogWarning($"解析 WebSocket 消息失败: {ex}");
+        //     }
+        // }
 
-        /// <summary>
-        /// 关闭 WebSocket
-        /// </summary>
         public static async UniTask Close()
         {
             if (_cts != null)
@@ -144,12 +191,42 @@ namespace RealBTC
         }
 
         [Serializable]
-        private class TradeMsg
+        private class KlineWrapper
         {
-            public string e; // event type
-            public long E; // event time
-            public string s; // symbol
-            public string p; // price
+            public string e;
+            public KlineData k;
+        }
+
+        [Serializable]
+        private class KlineData
+        {
+            public string o; // 开盘
+            public string c; // 收盘
+            public string h; // 最高
+            public string l; // 最低
+            public long f; // 成交数
+            public int n; // 成交数
+        }
+
+        public readonly struct KlineInfo
+        {
+            public readonly int Open;
+            public readonly int Close;
+            public readonly int High;
+            public readonly int Low;
+            public readonly int Trades;
+            public readonly bool flag;
+
+            public KlineInfo(int open, int close, int high, int low, int trades,bool flag)
+            {
+                Open = open;
+                Close = close;
+                High = high;
+                Low = low;
+                Trades = trades;
+                this.flag = flag;
+            }
         }
     }
 }
+
