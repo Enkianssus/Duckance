@@ -23,7 +23,7 @@ namespace RealBTC.Patches
                 //PerformanceMonitor.IncrementCounter("Bitcoin_Value_Access");
                 try
                 {
-                   __result = BitcoinPriceManager.CurrentBitcoinPrice;
+                  // __result = BitcoinPriceManager.CurrentBitcoinPrice;
                 }
                 catch (Exception ex)
                 {

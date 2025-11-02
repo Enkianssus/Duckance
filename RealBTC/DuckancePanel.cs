@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using RealBTC.Data;
 using RealBTC.Network;
 using RealBTC.UI;
 using Shapes;
@@ -39,6 +40,9 @@ namespace RealBTC.UI
         private TextMeshProUGUI _buyPriceLabel;
         private TextMeshProUGUI _sellPriceLabel;
         private TextMeshProUGUI _versionLabel;
+        private TextMeshProUGUI depositBtnLabel;
+        private TextMeshProUGUI depositBtnAllLabel;
+        private TextMeshProUGUI withdrawBtnLabel;
 
         private Image _connectionIndicator;
         private TMP_Text _connectionLabel;
@@ -67,7 +71,7 @@ namespace RealBTC.UI
         #region UI 构建
 
         private Slider amountSlider;
-        private int maxAmount=10;
+        private int maxAmount=50;
         private void BuildUI()
         {
             var root = this;
@@ -96,14 +100,21 @@ namespace RealBTC.UI
             _connectionLabel.color = Color.white;
             
             // ---------- 版本状态指示 ----------
-            _versionLabel = CreateTMP(root.transform, "VersionLabel", 18, TextAlignmentOptions.Left);
-            _versionLabel.rectTransform.anchorMin = new Vector2(0, 1);
-            _versionLabel.rectTransform.anchorMax = new Vector2(0, 1);
-            _versionLabel.rectTransform.pivot = new Vector2(0, 1);
-            _versionLabel.rectTransform.anchoredPosition = new Vector2(220, -12); // 在连接状态右侧
+            _versionLabel = CreateTMP(root.transform, "VersionLabel", 18, TextAlignmentOptions.Right);
+            _versionLabel.rectTransform.anchorMin = new Vector2(1, 1);
+            _versionLabel.rectTransform.anchorMax = new Vector2(1, 1);
+            _versionLabel.rectTransform.pivot = new Vector2(1, 1);
+            _versionLabel.rectTransform.anchoredPosition = new Vector2(-50, -12); // 在连接状态右侧
             _versionLabel.text = "版本：加载中…";
             _versionLabel.color = Color.gray;
 
+            var textTradeNum = new GameObject("TradeNum", typeof(RectTransform), typeof(TextMeshProUGUI));
+            textTradeNum.transform.SetParent(root.transform, false);
+            var textTradeNuRect = textTradeNum.GetComponent<RectTransform>();
+            textTradeNuRect.sizeDelta = new Vector2(70, 25);
+            textTradeNuRect.anchoredPosition = new Vector2(-550, 400); // 原本对齐位置
+            tradeNumText=textTradeNuRect.GetComponent<TextMeshProUGUI>();
+            
             // 启动异步检查
             CheckVersionAsync().Forget();
             
@@ -119,20 +130,22 @@ namespace RealBTC.UI
             // ---------- 标题 ----------
             var title = CreateTMP(root.transform, "Title", 30, TextAlignmentOptions.Center);
             title.text = IsChinese?"Duckance 交易所":"Duckance";
-            title.rectTransform.anchoredPosition = new Vector2(0, -60);
+            title.rectTransform.anchoredPosition = new Vector2(0, 450);
 
             // ---------- 价格 & 持仓 ----------
             _priceText = CreateTMP(root.transform, "Price", 24, TextAlignmentOptions.Center);
-            _priceText.rectTransform.anchoredPosition = new Vector2(0, -110);
+            _priceText.rectTransform.anchoredPosition = new Vector2(0, 80);
             
             
             var changeText = IsChinese?"(加载中)":"loading";
             var priceColor = new Color(0.8f, 0.8f, 0.8f);
             
-            _priceText.text = IsChinese? $"当前 0.2 BTC 价格：加载中 " +
+            _priceText.text = IsChinese? $"当前BTC 价格加载中 " +
                               $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>":
                 $"Current 0.2 BTC Price: loading " +
                 $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";;
+           
+            
             _priceText.color = priceColor;
             
         
@@ -165,12 +178,87 @@ namespace RealBTC.UI
             // ---------- 打开文件夹按钮（调试用） ----------
            // var openBtn = CreateOpenFolderButton(root.transform);
            // openBtn.onClick.AddListener(OpenModFolder);
-           _buyButton.onClick.AddListener(()=>ExecuteBuyAsync().Forget());
+           _buyButton.onClick.AddListener(()=>ExecuteBuy());
            _sellButton.onClick.AddListener(()=>ExecuteSell());
 
 
           // candleManager = new CandleManager(20, this.transform, new Vector2(0, 0), new Vector2(1, 0.3f));
            //BuildGraph(this.transform);
+           // ---------- 资金与现货显示 ----------
+var panelGO = new GameObject("HoldingPanel", typeof(RectTransform));
+panelGO.transform.SetParent(root.transform, false);
+var panelRect = panelGO.GetComponent<RectTransform>();
+panelRect.anchorMin = new Vector2(0.5f, 1);
+panelRect.anchorMax = new Vector2(0.5f, 1);
+panelRect.pivot = new Vector2(0.5f, 1);
+panelRect.anchoredPosition = new Vector2(0, -545);
+panelRect.sizeDelta = new Vector2(600, 50);
+
+// === 文字部分 ===
+_holdingText = CreateTMP(panelGO.transform, "HoldingText", 22, TextAlignmentOptions.Center);
+_holdingText.rectTransform.anchorMin = new Vector2(0, 0.5f);
+_holdingText.rectTransform.anchorMax = new Vector2(1, 0.5f);
+_holdingText.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+_holdingText.rectTransform.anchoredPosition = new Vector2(0, 0);
+_holdingText.text = "账户余额：加载中… | 背包持仓：加载中…";
+
+// === 存入按钮 ===
+var depositBtn = CreateUIButton(panelGO.transform, "DepositButton", "存入", new Vector2(-60+60, -50),out depositBtnLabel);
+depositBtn.onClick.AddListener(() =>
+{
+    double walletBTC = BtcBalanceManager.Balance; // 当前账户 BTC 资金
+    double inventoryBTC = ItemUtilities.GetItemCount(BTC_ID); // 玩家持有现货
+    double amount = Math.Min(tradeAmount, inventoryBTC); // 不能超过现货
+    if (amount <= 0)
+    {
+        Debug.Log("[RealBTC] 没有足够的现货存入。");
+        NotificationText.Push(IsChinese?"存入 BTC 失败":"Failed to deposit BTC.");
+        return;
+    }
+    
+    Debug.Log($"[RealBTC] 存入 {amount*0.2f} BTC");
+    if (!new Cost(0L, new[] { (388, (long)amount) }).Pay(false, false))
+    {
+        NotificationText.Push(IsChinese?"存入 BTC 失败":"Failed to deposit BTC.");
+        return;
+    }
+    BtcBalanceManager.AddBalance(amount*0.2f);
+    //EconomyManager.Add((long)income);
+    NotificationText.Push(IsChinese?$"成功存入 {amount*0.2f:F1}btc":$" successfully deposit{amount*0.2f:F1}btc ");
+});
+
+var depositBtnAll = CreateUIButton(panelGO.transform, "DepositButton", "存入所有", new Vector2(-180+60, -50),out depositBtnAllLabel);
+depositBtnAll.onClick.AddListener(() =>
+{
+    double walletBTC = BtcBalanceManager.Balance; // 当前账户 BTC 资金
+    double inventoryBTC = ItemUtilities.GetItemCount(BTC_ID); // 玩家持有现货
+    double amount = inventoryBTC; // 不能超过现货
+    if (amount <= 0)
+    {
+        Debug.Log("[RealBTC] 没有足够的现货存入。");
+        NotificationText.Push(IsChinese?"存入 BTC 失败":"Failed to deposit BTC.");
+        return;
+    }
+    
+    Debug.Log($"[RealBTC] 存入 {amount*0.2f} BTC");
+    if (!new Cost(0L, new[] { (388, (long)amount) }).Pay(false, false))
+    {
+        NotificationText.Push(IsChinese?"存入 BTC 失败":"Failed to deposit BTC.");
+        return;
+    }
+    BtcBalanceManager.AddBalance(inventoryBTC*0.2f);
+    //EconomyManager.Add((long)income);
+    NotificationText.Push(IsChinese?$"成功存入 {amount*0.2f:F1}btc":$" successfully deposit{amount*0.2f:F1}btc ");
+});
+
+// === 取出按钮 ===
+var withdrawBtn = CreateUIButton(panelGO.transform, "WithdrawButton", "取出", new Vector2(60+60, -50),out withdrawBtnLabel);
+withdrawBtn.onClick.AddListener(() =>
+{
+    ExecuteWithdrawAsync().Forget();
+    
+});
+
 
            CreateAmountPanel(this.transform);
 
@@ -180,9 +268,34 @@ namespace RealBTC.UI
            LocalizationManager.OnSetLanguage += LazyUpdate;
         }
 
+        private Button CreateUIButton(Transform parent, string name, string text, Vector2 pos,out TextMeshProUGUI label)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+
+            var rect = go.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(100, 36);
+            rect.anchoredPosition = pos;
+
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0.3f, 0.3f, 0.3f, 0.8f);
+
+            var btn = go.GetComponent<Button>();
+
+            label = CreateTMP(go.transform, name + "_Label", 20, TextAlignmentOptions.Center);
+            label.text = text;
+            label.rectTransform.anchoredPosition = Vector2.zero;
+
+            return btn;
+        }
         private void LazyUpdate(SystemLanguage obj)
         {
             UpdateVersionLabel();
+
+            withdrawBtnLabel.text = IsChinese ? "取出" : "Withdraw";
+            depositBtnLabel.text = IsChinese ? "存入" : "Deposit";
+            depositBtnAllLabel.text = IsChinese ? "存入所有" : "Deposit All";
+            balanceLabel.text = IsChinese ? "所有资金" : "Max Balance";
         }
 
         void UpdateVersionLabel()
@@ -278,12 +391,7 @@ namespace RealBTC.UI
     amountSlider.direction = Slider.Direction.LeftToRight;
 
     
-    var textTradeNum = new GameObject("TradeNum", typeof(RectTransform), typeof(TextMeshProUGUI));
-    textTradeNum.transform.SetParent(panelGO.transform, false);
-    var textTradeNuRect = textTradeNum.GetComponent<RectTransform>();
-    textTradeNuRect.sizeDelta = new Vector2(100, 40);
-    textTradeNuRect.anchoredPosition = new Vector2(-520, 8); // 原本对齐位置
-    tradeNumText=textTradeNuRect.GetComponent<TextMeshProUGUI>();
+    
     // 数字显示
     var textGO = new GameObject("AmountText", typeof(RectTransform), typeof(TextMeshProUGUI));
     textGO.transform.SetParent(panelGO.transform, false);
@@ -294,14 +402,14 @@ namespace RealBTC.UI
     amountText = textGO.GetComponent<TextMeshProUGUI>();
     amountText.fontSize = 24;
     amountText.alignment = TextAlignmentOptions.Center;
-    amountText.text = tradeAmount.ToString();
+    amountText.text =  $"{tradeAmount*0.2f:F1}";;
     amountText.raycastTarget = false;
 
     // 滑动条变化时更新数字
     amountSlider.onValueChanged.AddListener(val =>
     {
         tradeAmount = Mathf.RoundToInt(val);
-        amountText.text = tradeAmount.ToString();
+        amountText.text =  $"{tradeAmount*0.2f:F1}";;
     });
           
 
@@ -309,12 +417,61 @@ namespace RealBTC.UI
 
     // x1, x10, x100 按钮
     //CreateMultiplierButton(panelGO.transform, "x1", 1, new Vector2(120 + 150, 0));
-    CreateMultiplierButton(panelGO.transform, "x10", 10, new Vector2(180 + 200, 0),new Vector2(50, 40));
-    CreateMultiplierButton(panelGO.transform, "x50", 50, new Vector2(240 + 200, 0),new Vector2(50, 40));
-    CreateMultiplierButton(panelGO.transform, "x100", 100, new Vector2(300 + 200, 0),new Vector2(50, 40));
-    CreateMultiplierButton(panelGO.transform, "x1000", 1000, new Vector2(370 + 200, 0),new Vector2(70, 40));
+    CreateMultiplierButton(panelGO.transform, "x10", 10*5, new Vector2(180 + 200, 0),new Vector2(50, 40));
+    CreateMultiplierButton(panelGO.transform, "x50", 50*5, new Vector2(240 + 200, 0),new Vector2(50, 40));
+    CreateMultiplierButton(panelGO.transform, "x100", 100*5, new Vector2(300 + 200, 0),new Vector2(50, 40));
+    CreateMultiplierButton(panelGO.transform, "x1000", 1000*5, new Vector2(370 + 200, 0),new Vector2(70, 40));
+    CreateMultiplierButton(panelGO.transform, "x10000", 10000*5, new Vector2(470 + 200, 0),new Vector2(90, 40));
+
+    CreateMultiplierButton(panelGO.transform, IsChinese?"所有资金":"Max Balance",
+        () => { return Math.Max((int)(BtcBalanceManager.Balance / 0.2d),1);}, new Vector2(-120, 0),new Vector2(130, 40),out balanceLabel);
+   // CreateMultiplierButton(panelGO.transform, "Holdings", BtcBalanceManager.InventoryBtcCount, new Vector2(470 + 200, 0),new Vector2(90, 40),out holdingsLabel);
+
         }
 
+        private TextMeshProUGUI balanceLabel;
+        private TextMeshProUGUI holdingsLabel;
+
+        private void CreateMultiplierButton(Transform parent, string label, Func<int> multiplier, Vector2 pos,Vector2 size,out TextMeshProUGUI text)
+        {
+            var btnGO = new GameObject(label, typeof(RectTransform), typeof(Button), typeof(Image));
+            btnGO.transform.SetParent(parent, false);
+
+            var rect = btnGO.GetComponent<RectTransform>();
+            //rect.sizeDelta = new Vector2(50, 40);
+            rect.sizeDelta = size;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchorMin = new Vector2(0, 0.5f);
+            rect.anchorMax = new Vector2(0, 0.5f);
+            rect.anchoredPosition = pos;
+
+            var img = btnGO.GetComponent<Image>();
+            img.color = new Color(1, 1, 1, 0.2f);
+            img.raycastTarget = true;
+
+            // 文本
+            var textGO = new GameObject("Text", typeof(RectTransform));
+            textGO.transform.SetParent(btnGO.transform, false);
+            text = textGO.AddComponent<TextMeshProUGUI>();
+            text.text = label;
+            text.fontSize = 20;
+            text.alignment = TextAlignmentOptions.Center;
+            var txtRect = textGO.GetComponent<RectTransform>();
+            txtRect.anchorMin = Vector2.zero;
+            txtRect.anchorMax = Vector2.one;
+            txtRect.offsetMin = Vector2.zero;
+            txtRect.offsetMax = Vector2.zero;
+
+            var btn = btnGO.GetComponent<Button>();
+            btn.onClick.AddListener(() =>
+            {
+                tradeAmount = multiplier.Invoke();
+                amountText.text =  $"{tradeAmount*0.2f:F1}";
+                maxAmount = multiplier.Invoke();
+                amountSlider.maxValue = Math.Max(tradeAmount,50) ;
+                amountSlider.value = tradeAmount;
+            });
+        }
         private void CreateMultiplierButton(Transform parent, string label, int multiplier, Vector2 pos,Vector2 size)
         {
             var btnGO = new GameObject(label, typeof(RectTransform), typeof(Button), typeof(Image));
@@ -349,7 +506,7 @@ namespace RealBTC.UI
             btn.onClick.AddListener(() =>
             {
                 tradeAmount = multiplier;
-                amountText.text = tradeAmount.ToString();
+                amountText.text =  $"{tradeAmount*0.2f:F1}";
                 maxAmount = multiplier;
                 amountSlider.maxValue = maxAmount;
                 amountSlider.value = tradeAmount;
@@ -469,22 +626,14 @@ namespace RealBTC.UI
         #endregion
 
         #region 价格刷新 & 按钮交互
-
-        private async UniTaskVoid RunPriceWatcher()
-        {
-            while (_active && gameObject != null)
-            {
-                RefreshAll();
-                await UniTask.Delay(TimeSpan.FromSeconds(REFRESH_INTERVAL));
-            }
-        }
+        
 
         private void UpdateThis(BinanceWebSocketClient.KlineInfo obj)
         {
             //Debug.Log("UpdateThis");
             CandleManager.Instance.UpdateThis(obj);
             //candleManager.UpdatePrice(obj);
-            UpdateThis(obj.Close/5,((float)(obj.Close - obj.Open) / obj.Open)*100);
+            UpdateThis(obj.Close,((float)(obj.Close - obj.Open) / obj.Open)*100);
             
             
             if (BlackMarketViewExtensionHelper.IsChinese())
@@ -538,8 +687,13 @@ namespace RealBTC.UI
                }
 
                // === 更新 UI ===
-               _priceText.text = $"当前 0.2 BTC 价格：{priceStr} " +
-                                 $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
+               // _priceText.text = $"当前 0.2 BTC 价格：{priceStr} " +
+               //                   $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
+               _priceText.text = IsChinese
+                   ? $"当前 1 BTC 价格：{priceStr}  |  0.2 BTC：{(priceValid ? $"${rawPrice * 0.2:N0}" : "加载中")} " +
+                     $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>"
+                   : $"Current 1 BTC Price: {priceStr}  |  0.2 BTC: {(priceValid ? $"${rawPrice * 0.2:N0}" : "loading")} " +
+                     $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
                _priceText.color = priceColor;
            }
 
@@ -625,6 +779,11 @@ namespace RealBTC.UI
                 
                 _connectionLabel.text =  BinanceWebSocketClient.IsConnected ?"已连接":"未连接";
 
+                if (BinanceWebSocketClient.isUS)
+                {
+                    _connectionLabel.text += "  检测到美国ip 连接可能不稳定";
+                }
+
 
             }
             else
@@ -649,66 +808,21 @@ namespace RealBTC.UI
                 _sellButtonText.text = "sell";
                 
                 _connectionLabel.text =  BinanceWebSocketClient.IsConnected ?"Connected":"Disconnect";
+                
+                if (BinanceWebSocketClient.isUS)
+                {
+                    _connectionLabel.text += "  U.S. IP detected. connection may be unstable";
+                }
             }
             
+            double funds = BtcBalanceManager.Balance;
+            double inventory = ItemUtilities.GetItemCount(BTC_ID);
+            _holdingText.text = IsChinese
+                ? $"账户资金：{funds:F2} BTC | 现货持有：{inventory * 0.2:F2} BTC"
+                : $"Account Balance: {funds:F2} BTC | Spot Holdings: {inventory * 0.2:F2} BTC";
         }
 
-        private void RefreshAll()
-        {
-            return;
-           // Debug.Log("刷新UI");
-            try
-            {
-                int rawPrice = BitcoinPriceManager.CurrentBitcoinPriceDivideBy5; // 0.2 BTC 价格
-                int holding = ItemUtilities.GetItemCount(BTC_ID);
-
-                bool priceValid = rawPrice > 0;
-                string priceStr = priceValid ? $"${rawPrice:N0}" : "获取中…";
-
-                // === 计算涨跌幅 + 颜色 ===
-                string changeText = "";
-                Color priceColor = Color.white;
-
-                if (priceValid )
-                {
-                    float change = BitcoinPriceManager.Growth;
-                    if (Mathf.Abs(change) > 0.01f) // 避免微小浮动
-                    {
-                        changeText = change > 0 ? $"(+{change:F4}%)" : $"({change:F4}%)";
-                        priceColor = change > 0 ? new Color(0.3f, 1f, 0.3f) : new Color(1f, 0.3f, 0.3f); // 绿/红
-                    }
-                }
-                else if (!priceValid)
-                {
-                    changeText = "(加载中)";
-                    priceColor = new Color(0.8f, 0.8f, 0.8f);
-                }
-
-                // === 更新 UI ===
-                _priceText.text = $"当前 0.2 BTC 价格：{priceStr} " +
-                                  $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
-                _priceText.color = priceColor;
-
-                _holdingText.text = $"持有数量：{holding} 枚";
-
-                _buyPriceLabel.text = priceValid ? $"需支付：{priceStr}" : "——";
-                _sellPriceLabel.text = priceValid ? $"可获得：{rawPrice-feeSell}（含50手续费）" : "——";
-
-                bool canBuy = priceValid && EconomyManager.Money >= rawPrice;
-                bool canSell = priceValid && holding > 0;
-
-                //SetButton(_buyButton, canBuy, () => ExecuteBuy(rawPrice));
-                //SetButton(_sellButton, canSell, () => ExecuteSell(rawPrice));
-
-               
-            }
-            catch (Exception ex)
-            {
-                _priceText.text = "价格获取失败";
-                _priceText.color = Color.white;
-                Debug.LogError($"[RealBTC] RefreshAll error: {ex}");
-            }
-        }
+        
 
         private void SetButton(Button btn, bool interactable, UnityAction action)
         {
@@ -724,28 +838,70 @@ namespace RealBTC.UI
 
         bool CanSell()
         {
-            return BinanceWebSocketClient.CurrentPriceDivideBy5>0&&tradeAmount>0&&ItemUtilities.GetItemCount(BTC_ID) >= tradeAmount;
+            return BinanceWebSocketClient.CurrentPriceDivideBy5>0&&tradeAmount>0&&BtcBalanceManager.Balance >= tradeAmount*0.2f;
         }
         private void ExecuteBuy()
         {
-            long cost = BinanceWebSocketClient.CurrentPriceDivideBy5*tradeAmount;
-            if (!CanBuy())
+            long pricePerBTC = BinanceWebSocketClient.CurrentPriceDivideBy5; // 当前单价
+            double buyAmount = tradeAmount; // 购买数量（单位 BTC）
+            long totalCost = pricePerBTC * tradeAmount;
+
+            // if (!CanBuy())
+            // {
+            //     NotificationText.Push(IsChinese ? "现金不足，无法买入 BTC" : "Insufficient cash to buy BTC");
+            //     return;
+            // }
+
+            // 检查现金是否足够
+            if (!EconomyManager.IsEnough(new Cost(totalCost)))
             {
-                NotificationText.Push("现金不足，无法买入 BTC");
+                NotificationText.Push(IsChinese ? "现金不足" : "Not enough cash");
                 return;
             }
 
-            EconomyManager.Pay(new Cost((long)cost), true, true);
-            for (int i = 0; i < tradeAmount; i++)
-            {
-                var item = ItemAssetsCollection.InstantiateSync(BTC_ID);
-                ItemUtilities.SendToPlayer(item, true);
-            }
-            NotificationText.Push($"买入成功！花费 ${cost:N0} 获得 {tradeAmount} BTC");
-            //RefreshAll();
+            // 扣除现金
+            EconomyManager.Pay(new Cost((long)totalCost), true, true);
+
+            // 增加账户资金（BTC）
+            BtcBalanceManager.AddBalance(buyAmount*0.2f);
+
+            NotificationText.Push(
+                IsChinese
+                    ? $"买入成功！花费 ${totalCost:N0} 获得 {buyAmount*0.2f:F2} BTC"
+                    : $"Purchase successful! Spent ${totalCost:N0} for {buyAmount*0.2f:F2} BTC"
+            );
         }
 
         private bool IsChinese => BlackMarketViewExtensionHelper.IsChinese();
+        private async UniTask ExecuteWithdrawAsync()
+        {
+            double walletBTC = BtcBalanceManager.Balance;
+            double amount = Math.Min(tradeAmount*0.2f, walletBTC); // 不能超过账户余额
+            if (amount <= 0)
+            {
+                NotificationText.Push(IsChinese?"账户余额不足，无法取出 BTC":"insufficient btc");
+                Debug.Log("[RealBTC] 没有足够的账户余额取出。");
+                return;
+            }
+
+            BtcBalanceManager.AddBalance(-amount);
+            
+            Debug.Log($"[RealBTC] 取出 {amount} BTC");
+            
+            
+            
+            // 并行生成所有 BTC
+            var tasks = new UniTask<Item>[tradeAmount];
+            for (int i = 0; i < tradeAmount; i++)
+                tasks[i] = ItemAssetsCollection.InstantiateAsync(BTC_ID);
+
+            Item[] items = await UniTask.WhenAll(tasks);
+
+            foreach (var item in items)
+                ItemUtilities.SendToPlayer(item, true);
+
+            NotificationText.Push(IsChinese?$"取出成功 获得 {tradeAmount} 个0.2BTC":$"WithDraw successfully! get {tradeAmount} 0.2 BTC");
+        }
         private async UniTask ExecuteBuyAsync()
         {
             long cost = BinanceWebSocketClient.CurrentPriceDivideBy5 * tradeAmount;
@@ -772,23 +928,28 @@ namespace RealBTC.UI
 
         private void ExecuteSell()
         {
-            long income = BinanceWebSocketClient.CurrentPriceDivideBy5*tradeAmount - feeSell;
-            if (!CanSell())
+            long pricePerBTC = BinanceWebSocketClient.CurrentPriceDivideBy5; // 每个BTC价格
+            double sellAmount = tradeAmount*0.2f; // 卖出的BTC数量（对应一个物品0.2BTC）
+            long totalIncome = pricePerBTC * tradeAmount - feeSell;
+
+            if (BtcBalanceManager.Balance < sellAmount)
             {
-                NotificationText.Push(IsChinese?" BTC 不足":"insufficient BTC");
+                NotificationText.Push(IsChinese ? "账户资金不足" : "Insufficient BTC balance");
                 return;
             }
 
-            // 扣除 1 个 BTC
-            if (!new Cost(0L, new[] { (388, (long)tradeAmount) }).Pay(false, false))
-            {
-                NotificationText.Push(IsChinese?"扣除 BTC 失败":"Failed to deduct BTC.");
-                return;
-            }
+            // 扣除 BTC 账户资金
+            BtcBalanceManager.AddBalance(-sellAmount);
+            EconomyManager.Add((long)totalIncome);
 
-            EconomyManager.Add((long)income);
-            NotificationText.Push(IsChinese?$"卖出成功！获得 ${income:N0}(含50手续费)":$"Sold successfully! Get ${income:N0} (including 50 fee)");
-           // RefreshAll();
+            NotificationText.Push(
+                IsChinese
+                    ? $"卖出成功！获得 ${totalIncome:N0}（含50手续费）"
+                    : $"Sold successfully! Received ${totalIncome:N0} (including 50 fee)"
+            );
+
+            // 可选：保存余额
+            //BtcBalanceManager.SaveBalance();
         }
 
         #endregion

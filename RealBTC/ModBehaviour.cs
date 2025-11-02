@@ -16,6 +16,8 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 using ItemStatsSystem;
+using RealBTC.Compatibility.MakeBitcoinGreatAgain;
+using RealBTC.Data;
 using RealBTC.Network;
 using RealBTC.UI;
 using RealBTC.Utils;
@@ -33,9 +35,8 @@ namespace RealBTC
 
         void OnEnable()
         {
-            Debug.Log("Duckance Loaded");
             //BitcoinPriceManager.Init();
-            
+
             BlackMarketViewExtensionHelper.Instance.Init();
             //RuntimeUnityEditorCore.Instance.Show = true;
             BlackMarketViewExtensionHelper.Instance.QueueCreatePanel("DuckancePanel","鸭安Duckance", (t, p) =>
@@ -53,11 +54,14 @@ namespace RealBTC
                     CandleManager.useSilentUpdate = false;
                 }
             });
+            Debug.Log("Duckance Loaded");
         }
 
         private void Start()
         {
             BinanceWebSocketClient.Init();
+            BitcoinHijacker.Activate().Forget();
+            BtcBalanceManager.Load();
         }
 
         async void OnDestroy()

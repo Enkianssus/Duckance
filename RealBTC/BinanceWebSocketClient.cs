@@ -66,6 +66,8 @@ namespace RealBTC.Network
             "wss://stream.binance.com:9443/ws/",
         };
 
+        public static  bool isUS=false;
+
         public static async UniTask ConnectWebSocketAsync(string symbol, CancellationToken token)
         {
             string endpoint = await GetAvailableEndpoint(symbol, token);
@@ -116,6 +118,8 @@ namespace RealBTC.Network
                 if (ok)
                 {
                     Debug.Log($"🌐 使用可用节点: {endpoint}");
+                    if (endpoint == Endpoints[1]) isUS = true;
+                    else  isUS = false;
                     return endpoint;
                 }
             }
