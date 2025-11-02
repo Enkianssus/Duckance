@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 using Duckov.BlackMarkets;
@@ -43,7 +44,15 @@ namespace RealBTC.UI
             LevelManager.OnAfterLevelInitialized -= BlackMarketViewExtensionHelper.Instance.InitThis;
             instance = null;
         }
-        
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsChinese()
+        {
+            return SodaCraft.Localizations.LocalizationManager.CurrentLanguage == SystemLanguage.Chinese ||
+                   SodaCraft.Localizations.LocalizationManager.CurrentLanguage == SystemLanguage.ChineseSimplified ||
+                   SodaCraft.Localizations.LocalizationManager.CurrentLanguage == SystemLanguage.ChineseTraditional;
+
+        }
 
         public Transform MainContent;
         public Transform Taps;
@@ -152,7 +161,7 @@ namespace RealBTC.UI
             
             tab = Object. Instantiate(Tab_Supply, Taps);
             tab.name = "Tap_"+id;
-            tab.GetChild(0).KeepThisMonoDisableOthers<TMP_Text>().text=tabName;
+            tab.GetChild(0).KeepThisMonoDestroyOthers<TMP_Text>().text=tabName;
         }
 
 

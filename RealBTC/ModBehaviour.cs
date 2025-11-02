@@ -49,7 +49,6 @@ namespace RealBTC
                     CandleManager.useSilentUpdate = false;
                 }
             });
-            
         }
 
         private void Start()

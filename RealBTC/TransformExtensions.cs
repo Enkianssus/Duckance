@@ -69,5 +69,32 @@ namespace RealBTC.Utils
 
             return keep;
         }
+        public static T KeepThisMonoDestroyOthers<T>(this Transform transform) where T : MonoBehaviour
+        {
+            if (transform == null) return null;
+
+            T keep = null;
+
+            // 只获取当前 Transform 上的 MonoBehaviour
+            var all = transform.GetComponents<MonoBehaviour>();
+
+            foreach (var comp in all)
+            {
+                if (comp is T tComp)
+                {
+                    if (keep == null)
+                        keep = tComp; // 第一个 T 类型组件保留
+                    else
+                        comp.enabled = false; // 可选：禁用其他同类型组件
+                }
+                else
+                {
+                    Object.Destroy(comp);
+                    //comp.enabled = false; // 关闭其他 MonoBehaviour
+                }
+            }
+
+            return keep;
+        }
     }
 }

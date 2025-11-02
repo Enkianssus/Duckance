@@ -15,6 +15,7 @@ namespace RealBTC.Network
         private static ClientWebSocket _webSocket;
         private static CancellationTokenSource _cts;
 
+        private static bool _isReconnecting = false;
         public static int CurrentPrice=-1;
         public static int CurrentPriceDivideBy5=-1;
 
@@ -37,7 +38,8 @@ namespace RealBTC.Network
             }
 
             _cts = new CancellationTokenSource();
-            ConnectWebSocket(symbol, _cts.Token).Forget();
+            //ConnectWebSocket(symbol, _cts.Token).Forget();
+            ConnectWebSocketAsync(symbol, _cts.Token).Forget();
         }
 
         private static async UniTask ConnectWebSocket(string symbol, CancellationToken token)
@@ -55,6 +57,85 @@ namespace RealBTC.Network
             catch (Exception ex)
             {
                 Debug.LogError($"WebSocket 连接失败: {ex}");
+            }
+        }
+        private static readonly string[] Endpoints = new[]
+        {
+            "wss://stream.binance.me:9443/ws/",
+            "wss://stream.binance.us:9443/ws/",
+            "wss://stream.binance.com:9443/ws/",
+        };
+
+        public static async UniTask ConnectWebSocketAsync(string symbol, CancellationToken token)
+        {
+            string endpoint = await GetAvailableEndpoint(symbol, token);
+            if (endpoint == null)
+            {
+                Debug.LogError("无法连接到任何 Binance WebSocket 端点。");
+                return;
+            }
+
+            string url = $"{endpoint}{symbol.ToLower()}@kline_1m";
+            _webSocket = new ClientWebSocket();
+
+            try
+            {
+                await _webSocket.ConnectAsync(new Uri(url), token);
+                Debug.Log($"✅ WebSocket 已连接: {url}");
+                await ReceiveLoop(token);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"❌ WebSocket 连接失败: {ex}");
+            }
+        }
+
+        private static async UniTask TryReconnect(string symbol, CancellationToken token)
+        {
+            if (_isReconnecting) return;
+            _isReconnecting = true;
+
+            Debug.LogWarning("[BinanceWS] 尝试重连...");
+            await UniTask.Delay(3000, cancellationToken: token);
+
+            if (!token.IsCancellationRequested)
+            {
+                await ConnectWebSocketAsync(symbol, token);
+            }
+
+            _isReconnecting = false;
+        }
+        
+        // 自动选择可连接的端点
+        private static async UniTask<string> GetAvailableEndpoint(string symbol, CancellationToken token)
+        {
+            foreach (string endpoint in Endpoints)
+            {
+                string testUrl = $"{endpoint}{symbol.ToLower()}@kline_1m";
+                bool ok = await TestEndpointAsync(testUrl, token);
+                if (ok)
+                {
+                    Debug.Log($"🌐 使用可用节点: {endpoint}");
+                    return endpoint;
+                }
+            }
+            return null;
+        }
+
+        // 测试连接是否可用（超时3秒）
+        private static async UniTask<bool> TestEndpointAsync(string url, CancellationToken token)
+        {
+            using var ws = new ClientWebSocket();
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, token);
+                await ws.ConnectAsync(new Uri(url), linked.Token);
+                return ws.State == WebSocketState.Open;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -88,12 +169,22 @@ namespace RealBTC.Network
                 catch (Exception ex)
                 {
                     Debug.LogWarning($"WebSocket 接收异常: {ex}");
+                    if (!_isReconnecting && !token.IsCancellationRequested)
+                    {
+                        await TryReconnect("btcusdt", token);
+                    }
+                }
+                if (!_isReconnecting && !token.IsCancellationRequested)
+                {
+                    await TryReconnect("btcusdt", token);
                 }
             }
         }
+        
 
         private static void ProcessMessage(string msg)
         {
+           // Debug.Log(msg);
             try
             {
                 var wrapper = JsonConvert.DeserializeObject<KlineWrapper>(msg);
