@@ -169,15 +169,14 @@ namespace RealBTC.Network
                 catch (Exception ex)
                 {
                     Debug.LogWarning($"WebSocket 接收异常: {ex}");
-                    if (!_isReconnecting && !token.IsCancellationRequested)
-                    {
-                        await TryReconnect("btcusdt", token);
-                    }
+                    //IsConnected = false;   // 标记断开
+                    break;                 // 跳出循环，让外层逻辑重连
                 }
-                if (!_isReconnecting && !token.IsCancellationRequested)
-                {
-                    await TryReconnect("btcusdt", token);
-                }
+                
+            }
+            if (!_isReconnecting && !token.IsCancellationRequested)
+            {
+                await TryReconnect("btcusdt", token);
             }
         }
         

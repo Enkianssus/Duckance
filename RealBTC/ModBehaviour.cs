@@ -26,6 +26,10 @@ namespace RealBTC
     public class ModBehaviour : Duckov.Modding.ModBehaviour
     {
         //private CandleManager candleManager;
+        private void Awake()
+        {
+            VersionChecker.FetchVersionAsync().Forget();
+        }
 
         void OnEnable()
         {

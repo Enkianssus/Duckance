@@ -13,6 +13,7 @@ using System.Text;
 using RealBTC.Network;
 using RealBTC.UI;
 using Shapes;
+using SodaCraft.Localizations;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
@@ -37,6 +38,7 @@ namespace RealBTC.UI
         private TextMeshProUGUI _sellButtonText;
         private TextMeshProUGUI _buyPriceLabel;
         private TextMeshProUGUI _sellPriceLabel;
+        private TextMeshProUGUI _versionLabel;
 
         private Image _connectionIndicator;
         private TMP_Text _connectionLabel;
@@ -92,6 +94,18 @@ namespace RealBTC.UI
             _connectionLabel.rectTransform.anchoredPosition = new Vector2(50, -12);
             _connectionLabel.text = "未连接";
             _connectionLabel.color = Color.white;
+            
+            // ---------- 版本状态指示 ----------
+            _versionLabel = CreateTMP(root.transform, "VersionLabel", 18, TextAlignmentOptions.Left);
+            _versionLabel.rectTransform.anchorMin = new Vector2(0, 1);
+            _versionLabel.rectTransform.anchorMax = new Vector2(0, 1);
+            _versionLabel.rectTransform.pivot = new Vector2(0, 1);
+            _versionLabel.rectTransform.anchoredPosition = new Vector2(220, -12); // 在连接状态右侧
+            _versionLabel.text = "版本：加载中…";
+            _versionLabel.color = Color.gray;
+
+            // 启动异步检查
+            CheckVersionAsync().Forget();
             
             // ---------- 根容器 ----------
             //var root = //new GameObject("Duckance_Panel", typeof(RectTransform));
@@ -163,6 +177,53 @@ namespace RealBTC.UI
            UpdateThis(-1,0);
            //BitcoinPriceManager.OnPriceUpdate += UpdateThis;
            BinanceWebSocketClient.OnPriceUpdate += UpdateThis;
+           LocalizationManager.OnSetLanguage += LazyUpdate;
+        }
+
+        private void LazyUpdate(SystemLanguage obj)
+        {
+            UpdateVersionLabel();
+        }
+
+        void UpdateVersionLabel()
+        {
+            switch (VersionChecker.Status)
+            {
+                case VersionChecker.VersionStatus.UpToDate:
+                    _versionLabel.text = IsChinese
+                        ? $"版本：{VersionChecker.CurrentVersion}（最新）"
+                        : $"Version: {VersionChecker.CurrentVersion} (Up to date)";
+                    _versionLabel.color = new Color(0.3f, 1f, 0.3f); // 绿色
+                    break;
+
+                case VersionChecker.VersionStatus.Outdated:
+                    _versionLabel.text = IsChinese
+                        ? $"版本：{VersionChecker.CurrentVersion}（有更新：{VersionChecker.LatestVersion}）"
+                        : $"Version: {VersionChecker.CurrentVersion} (Update available: {VersionChecker.LatestVersion})";
+                    _versionLabel.color = new Color(1f, 0.8f, 0.3f); // 黄色
+                    break;
+
+                case VersionChecker.VersionStatus.FetchFailed:
+                    _versionLabel.text = IsChinese
+                        ? $"版本：{VersionChecker.CurrentVersion}（获取失败）"
+                        : $"Version: {VersionChecker.CurrentVersion} (Fetch failed)";
+                    _versionLabel.color = new Color(1f, 0.4f, 0.4f); // 红色
+                    break;
+
+                default:
+                    _versionLabel.text = IsChinese
+                        ? $"版本：{VersionChecker.CurrentVersion}"
+                        : $"Version: {VersionChecker.CurrentVersion}";
+                    _versionLabel.color = Color.white;
+                    break;
+            }
+        }
+
+        private async UniTaskVoid CheckVersionAsync()
+        {
+            await VersionChecker.FetchVersionAsync();
+
+            UpdateVersionLabel();
         }
 
 
@@ -778,6 +839,8 @@ namespace RealBTC.UI
             
             
             BinanceWebSocketClient.OnPriceUpdate -= UpdateThis;
+            LocalizationManager.OnSetLanguage -= LazyUpdate;
+
             CandleManager.useSilentUpdate=true;
 
                 //BitcoinPriceManager.OnPriceUpdate -= UpdateThis;
