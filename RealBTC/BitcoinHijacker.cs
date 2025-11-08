@@ -50,7 +50,7 @@ namespace RealBTC.Compatibility.MakeBitcoinGreatAgain
             Debug.Log("[RealBTC] BitcoinHijacker 已激活，等待 Binance 数据。");
 
             // 当 Binance 有新数据时同步
-            BinanceWebSocketClient.OnPriceUpdate += info => ApplyPrice(info.Close);
+            BinanceWebSocketClient.OnPriceUpdate += info => ApplyPrice(info.Close/5);
         }
 
         private static void CacheInstance()

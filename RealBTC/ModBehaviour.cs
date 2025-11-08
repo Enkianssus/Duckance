@@ -10,6 +10,7 @@ using Duckov.BlackMarkets.UI;
 using Duckov.Economy;
 using Duckov.UI;
 using Duckov.Utilities;
+using HarmonyLib;
 using ItemStatsSystem;
 using TMPro;
 using UnityEngine;
@@ -28,6 +29,7 @@ namespace RealBTC
     public class ModBehaviour : Duckov.Modding.ModBehaviour
     {
         //private CandleManager candleManager;
+        private Harmony harmony;
         private void Awake()
         {
             VersionChecker.FetchVersionAsync().Forget();
@@ -39,11 +41,12 @@ namespace RealBTC
 
             BlackMarketViewExtensionHelper.Instance.Init();
             //RuntimeUnityEditorCore.Instance.Show = true;
-            BlackMarketViewExtensionHelper.Instance.QueueCreatePanel("DuckancePanel","鸭安Duckance", (t, p) =>
+            BlackMarketViewExtensionHelper.Instance.QueueCreatePanel("DuckancePanel",BlackMarketViewExtensionHelper.IsChinese()?"鸭安Duckance":"Duckance", (t, p) =>
             {
                 
                 var duckancePanel =p.gameObject.AddComponent<DuckancePanel>();
                 duckancePanel.Setup();
+                //duckancePanel.tab = t.GetComponent<TextMeshProUGUI>();
                 if (CandleManager.Instance == null)
                     CandleManager.Instance = new CandleManager(20, duckancePanel.transform, new Vector2(0, 0),
                         new Vector2(1, 0.3f));
@@ -54,6 +57,7 @@ namespace RealBTC
                     CandleManager.useSilentUpdate = false;
                 }
             });
+            
             Debug.Log("Duckance Loaded");
         }
 
@@ -62,6 +66,8 @@ namespace RealBTC
             BinanceWebSocketClient.Init();
             BitcoinHijacker.Activate().Forget();
             BtcBalanceManager.Load();
+            this.harmony = new Harmony("Duckance");
+            this.harmony.PatchAll(Assembly.GetExecutingAssembly());
         }
 
         async void OnDestroy()
@@ -69,6 +75,7 @@ namespace RealBTC
            await BinanceWebSocketClient.Close();
            BlackMarketViewExtensionHelper.OnDestroy();
            CandleManager.OnDestroy();
+           this.harmony.UnpatchAll("Duckance");
         }
     }
 }

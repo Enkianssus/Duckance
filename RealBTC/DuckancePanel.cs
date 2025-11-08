@@ -43,6 +43,7 @@ namespace RealBTC.UI
         private TextMeshProUGUI depositBtnLabel;
         private TextMeshProUGUI depositBtnAllLabel;
         private TextMeshProUGUI withdrawBtnLabel;
+        public TextMeshProUGUI tab;
 
         private Image _connectionIndicator;
         private TMP_Text _connectionLabel;
@@ -130,7 +131,7 @@ namespace RealBTC.UI
             // ---------- 标题 ----------
             var title = CreateTMP(root.transform, "Title", 30, TextAlignmentOptions.Center);
             title.text = IsChinese?"Duckance 交易所":"Duckance";
-            title.rectTransform.anchoredPosition = new Vector2(0, 450);
+            title.rectTransform.anchoredPosition = new Vector2(0, 420);
 
             // ---------- 价格 & 持仓 ----------
             _priceText = CreateTMP(root.transform, "Price", 24, TextAlignmentOptions.Center);
@@ -216,15 +217,15 @@ depositBtn.onClick.AddListener(() =>
         return;
     }
     
-    Debug.Log($"[RealBTC] 存入 {amount*0.2f} BTC");
+    Debug.Log($"[RealBTC] 存入 {amount*0.2d} BTC");
     if (!new Cost(0L, new[] { (388, (long)amount) }).Pay(false, false))
     {
         NotificationText.Push(IsChinese?"存入 BTC 失败":"Failed to deposit BTC.");
         return;
     }
-    BtcBalanceManager.AddBalance(amount*0.2f);
+    BtcBalanceManager.AddBalance(amount*0.2d);
     //EconomyManager.Add((long)income);
-    NotificationText.Push(IsChinese?$"成功存入 {amount*0.2f:F1}btc":$" successfully deposit{amount*0.2f:F1}btc ");
+    NotificationText.Push(IsChinese?$"成功存入 {amount*0.2d:F1}btc":$" successfully deposit{amount*0.2d:F1}btc ");
 });
 
 var depositBtnAll = CreateUIButton(panelGO.transform, "DepositButton", "存入所有", new Vector2(-180+60, -50),out depositBtnAllLabel);
@@ -240,15 +241,15 @@ depositBtnAll.onClick.AddListener(() =>
         return;
     }
     
-    Debug.Log($"[RealBTC] 存入 {amount*0.2f} BTC");
+    Debug.Log($"[RealBTC] 存入 {amount*0.2d} BTC");
     if (!new Cost(0L, new[] { (388, (long)amount) }).Pay(false, false))
     {
         NotificationText.Push(IsChinese?"存入 BTC 失败":"Failed to deposit BTC.");
         return;
     }
-    BtcBalanceManager.AddBalance(inventoryBTC*0.2f);
+    BtcBalanceManager.AddBalance(inventoryBTC*0.2d);
     //EconomyManager.Add((long)income);
-    NotificationText.Push(IsChinese?$"成功存入 {amount*0.2f:F1}btc":$" successfully deposit{amount*0.2f:F1}btc ");
+    NotificationText.Push(IsChinese?$"成功存入 {amount*0.2d:F1}btc":$" successfully deposit{amount*0.2d:F1}btc ");
 });
 
 // === 取出按钮 ===
@@ -262,6 +263,7 @@ withdrawBtn.onClick.AddListener(() =>
 
            CreateAmountPanel(this.transform);
 
+           LazyUpdate(LocalizationManager.CurrentLanguage);
            UpdateThis(-1,0);
            //BitcoinPriceManager.OnPriceUpdate += UpdateThis;
            BinanceWebSocketClient.OnPriceUpdate += UpdateThis;
@@ -290,12 +292,16 @@ withdrawBtn.onClick.AddListener(() =>
         }
         private void LazyUpdate(SystemLanguage obj)
         {
+            
             UpdateVersionLabel();
+            
+
 
             withdrawBtnLabel.text = IsChinese ? "取出" : "Withdraw";
             depositBtnLabel.text = IsChinese ? "存入" : "Deposit";
             depositBtnAllLabel.text = IsChinese ? "存入所有" : "Deposit All";
             balanceLabel.text = IsChinese ? "所有资金" : "Max Balance";
+            //tab.text=IsChinese?"鸭安Duckance":"Duckance";
         }
 
         void UpdateVersionLabel()
@@ -402,14 +408,14 @@ withdrawBtn.onClick.AddListener(() =>
     amountText = textGO.GetComponent<TextMeshProUGUI>();
     amountText.fontSize = 24;
     amountText.alignment = TextAlignmentOptions.Center;
-    amountText.text =  $"{tradeAmount*0.2f:F1}";;
+    amountText.text =  $"{tradeAmount*0.2d:F1}";;
     amountText.raycastTarget = false;
 
     // 滑动条变化时更新数字
     amountSlider.onValueChanged.AddListener(val =>
     {
         tradeAmount = Mathf.RoundToInt(val);
-        amountText.text =  $"{tradeAmount*0.2f:F1}";;
+        amountText.text =  $"{tradeAmount*0.2d:F1}";;
     });
           
 
@@ -417,8 +423,8 @@ withdrawBtn.onClick.AddListener(() =>
 
     // x1, x10, x100 按钮
     //CreateMultiplierButton(panelGO.transform, "x1", 1, new Vector2(120 + 150, 0));
-    CreateMultiplierButton(panelGO.transform, "x10", 10*5, new Vector2(180 + 200, 0),new Vector2(50, 40));
-    CreateMultiplierButton(panelGO.transform, "x50", 50*5, new Vector2(240 + 200, 0),new Vector2(50, 40));
+    CreateMultiplierButton(panelGO.transform, "x5", 5*5, new Vector2(180 + 200, 0),new Vector2(50, 40));
+    CreateMultiplierButton(panelGO.transform, "x10", 10*5, new Vector2(240 + 200, 0),new Vector2(50, 40));
     CreateMultiplierButton(panelGO.transform, "x100", 100*5, new Vector2(300 + 200, 0),new Vector2(50, 40));
     CreateMultiplierButton(panelGO.transform, "x1000", 1000*5, new Vector2(370 + 200, 0),new Vector2(70, 40));
     CreateMultiplierButton(panelGO.transform, "x10000", 10000*5, new Vector2(470 + 200, 0),new Vector2(90, 40));
@@ -466,7 +472,7 @@ withdrawBtn.onClick.AddListener(() =>
             btn.onClick.AddListener(() =>
             {
                 tradeAmount = multiplier.Invoke();
-                amountText.text =  $"{tradeAmount*0.2f:F1}";
+                amountText.text =  $"{tradeAmount*0.2d:F1}";
                 maxAmount = multiplier.Invoke();
                 amountSlider.maxValue = Math.Max(tradeAmount,50) ;
                 amountSlider.value = tradeAmount;
@@ -506,7 +512,7 @@ withdrawBtn.onClick.AddListener(() =>
             btn.onClick.AddListener(() =>
             {
                 tradeAmount = multiplier;
-                amountText.text =  $"{tradeAmount*0.2f:F1}";
+                amountText.text =  $"{tradeAmount*0.2d:F1}";
                 maxAmount = multiplier;
                 amountSlider.maxValue = maxAmount;
                 amountSlider.value = tradeAmount;
@@ -689,11 +695,10 @@ withdrawBtn.onClick.AddListener(() =>
                // === 更新 UI ===
                // _priceText.text = $"当前 0.2 BTC 价格：{priceStr} " +
                //                   $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
-               _priceText.text = IsChinese
-                   ? $"当前 1 BTC 价格：{priceStr}  |  0.2 BTC：{(priceValid ? $"${rawPrice * 0.2:N0}" : "加载中")} " +
-                     $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>"
-                   : $"Current 1 BTC Price: {priceStr}  |  0.2 BTC: {(priceValid ? $"${rawPrice * 0.2:N0}" : "loading")} " +
-                     $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
+               _priceText.text =
+                   $"当前 1 BTC 价格：{priceStr}  |  0.2 BTC：{(priceValid ? $"${rawPrice * 0.2:N0}" : "加载中")} " +
+                   $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
+                   
                _priceText.color = priceColor;
            }
 
@@ -722,8 +727,8 @@ withdrawBtn.onClick.AddListener(() =>
                }
 
 // === Update UI ===
-               _priceText.text = $"Current 0.2 BTC Price: {priceStr} " +
-                                 $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
+               _priceText.text =  $"Current 1 BTC Price: {priceStr}  |  0.2 BTC: {(priceValid ? $"${rawPrice * 0.2:N0}" : "loading")} " +
+                                  $"<color=#{ColorUtility.ToHtmlStringRGB(priceColor)}>{changeText}</color>";
                _priceText.color = priceColor;
            }
             
@@ -838,7 +843,7 @@ withdrawBtn.onClick.AddListener(() =>
 
         bool CanSell()
         {
-            return BinanceWebSocketClient.CurrentPriceDivideBy5>0&&tradeAmount>0&&BtcBalanceManager.Balance >= tradeAmount*0.2f;
+            return BinanceWebSocketClient.CurrentPriceDivideBy5>0&&tradeAmount>0&&BtcBalanceManager.Balance >= tradeAmount*0.2d;
         }
         private void ExecuteBuy()
         {
@@ -863,12 +868,12 @@ withdrawBtn.onClick.AddListener(() =>
             EconomyManager.Pay(new Cost((long)totalCost), true, true);
 
             // 增加账户资金（BTC）
-            BtcBalanceManager.AddBalance(buyAmount*0.2f);
+            BtcBalanceManager.AddBalance(buyAmount*0.2d);
 
             NotificationText.Push(
                 IsChinese
-                    ? $"买入成功！花费 ${totalCost:N0} 获得 {buyAmount*0.2f:F2} BTC"
-                    : $"Purchase successful! Spent ${totalCost:N0} for {buyAmount*0.2f:F2} BTC"
+                    ? $"买入成功！花费 ${totalCost:N0} 获得 {buyAmount*0.2d:F2} BTC"
+                    : $"Purchase successful! Spent ${totalCost:N0} for {buyAmount*0.2d:F2} BTC"
             );
         }
 
@@ -876,7 +881,7 @@ withdrawBtn.onClick.AddListener(() =>
         private async UniTask ExecuteWithdrawAsync()
         {
             double walletBTC = BtcBalanceManager.Balance;
-            double amount = Math.Min(tradeAmount*0.2f, walletBTC); // 不能超过账户余额
+            double amount = Math.Min(tradeAmount*0.2d, walletBTC); // 不能超过账户余额
             if (amount <= 0)
             {
                 NotificationText.Push(IsChinese?"账户余额不足，无法取出 BTC":"insufficient btc");
@@ -929,7 +934,7 @@ withdrawBtn.onClick.AddListener(() =>
         private void ExecuteSell()
         {
             long pricePerBTC = BinanceWebSocketClient.CurrentPriceDivideBy5; // 每个BTC价格
-            double sellAmount = tradeAmount*0.2f; // 卖出的BTC数量（对应一个物品0.2BTC）
+            double sellAmount = tradeAmount*0.2d; // 卖出的BTC数量（对应一个物品0.2BTC）
             long totalIncome = pricePerBTC * tradeAmount - feeSell;
 
             if (BtcBalanceManager.Balance < sellAmount)

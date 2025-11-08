@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Duckov.BlackMarkets.UI;
 using RealBTC.Network;
 using UnityEngine;
 using UnityEngine.UI;
@@ -142,13 +143,18 @@ namespace RealBTC.UI
         public void UpdateThis(BinanceWebSocketClient.KlineInfo newPrice)
         {
            // Debug.Log("useSilentUpdate"+useSilentUpdate);
-            if (useSilentUpdate) SilentUpdate(newPrice);
+            if (useSilentUpdate||BlackMarketView.Instance==null) SilentUpdate(newPrice);
             else UpdatePriceAndUI(newPrice);
         }
         public void SilentUpdate(BinanceWebSocketClient.KlineInfo newPrice)
         {
             if (newPrice.flag || Count == 0)
             {
+                // if (recentPrices.Count > 0 && Math.Abs(recentPrices.PeekLast().Close - newPrice.Open )> 1)
+                // {
+                //     recentPrices.Enqueue(new BinanceWebSocketClient.KlineInfo()
+                //     );
+                // }
                 recentPrices.Enqueue(newPrice);
             }
             else

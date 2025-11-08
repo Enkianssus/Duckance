@@ -1,3 +1,4 @@
+using System;
 using Saves;
 using UnityEngine;
 
@@ -8,8 +9,16 @@ namespace RealBTC.Data
         private const string SaveKey = "RealBTC_BtcBalanceManager"; // 存档用唯一键
         private static double _btcBalance = 0;
         private const int BTC_ID = 388;                     // Bitcoin 物品 ID
-
-        public static double Balance => _btcBalance;
+        public static event Action OnBalanceChanged;
+        public static double Balance
+        {
+            get => _btcBalance;
+            set
+            {
+                _btcBalance = value;
+                OnBalanceChanged?.Invoke();
+            }
+        }
         public static int InventoryBtcCount => ItemUtilities.GetItemCount(BTC_ID);
 
         // 加载余额
@@ -18,6 +27,7 @@ namespace RealBTC.Data
             if (SavesSystem.KeyExisits(SaveKey))
             {
                 _btcBalance = SavesSystem.Load<double>(SaveKey);
+                OnBalanceChanged?.Invoke();
                 Debug.Log($"[RealBTC] 已加载交易所余额：{_btcBalance} BTC");
             }
             else
@@ -43,12 +53,14 @@ namespace RealBTC.Data
         {
             _btcBalance += amount;
             if (_btcBalance < 0) _btcBalance = 0; // 防止负值
+            OnBalanceChanged?.Invoke();
             Save();
         }
 
         public static void SetBalance(double value)
         {
-            _btcBalance = Mathf.Max(0f, (float)value);
+            _btcBalance = Math.Max(0.0, value);
+            OnBalanceChanged?.Invoke();
             Save();
         }
     }
