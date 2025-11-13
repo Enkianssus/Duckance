@@ -882,7 +882,7 @@ withdrawBtn.onClick.AddListener(() =>
         {
             double walletBTC = BtcBalanceManager.Balance;
             double amount = Math.Min(tradeAmount*0.2d, walletBTC); // 不能超过账户余额
-            if (amount <= 0)
+            if (amount < 0.00000001d)
             {
                 NotificationText.Push(IsChinese?"账户余额不足，无法取出 BTC":"insufficient btc");
                 Debug.Log("[RealBTC] 没有足够的账户余额取出。");

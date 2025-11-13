@@ -17,6 +17,8 @@ namespace RealBTC.Data
             {
                 _btcBalance = value;
                 OnBalanceChanged?.Invoke();
+                if (_btcBalance < 0.00000001d) _btcBalance = 0; // 防止负值
+                
             }
         }
         public static int InventoryBtcCount => ItemUtilities.GetItemCount(BTC_ID);
@@ -52,7 +54,7 @@ namespace RealBTC.Data
         public static void AddBalance(double amount)
         {
             _btcBalance += amount;
-            if (_btcBalance < 0) _btcBalance = 0; // 防止负值
+            if (_btcBalance < 0.00000001d) _btcBalance = 0; // 防止负值
             OnBalanceChanged?.Invoke();
             Save();
         }
